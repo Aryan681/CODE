@@ -95,7 +95,14 @@ exports.getPlaylistTracks = async (req, res) => {
 
 exports.playTrack = async (req, res) => {
   try {
-    await spotifyService.playTrack(req.user.id, req.body.trackUri);
+    const { trackUri, deviceId } = req.body;
+    if (!deviceId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Device ID is required" 
+      });
+    }
+    await spotifyService.playTrack(req.user.id, trackUri, deviceId);
     res.json({ success: true, message: "Playback started" });
   } catch (error) {
     console.error(

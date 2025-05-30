@@ -31,7 +31,7 @@ spotifyApi.interceptors.response.use(
       // Handle token expiration or invalid token
       localStorage.removeItem("token");
       window.location.href = "/auth/login";
-      console.log(error);
+      console.error("Authentication error:", error);
     }
     return Promise.reject(error);
   }
@@ -55,20 +55,60 @@ export const initiateSpotifyLogin = async () => {
   }
 };
 
-export const refreshAccessToken = async (refreshToken) => {
-  const response = await fetch("http://localhost:3000/api/spotify/refresh", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refreshToken }),
-  });
+export const handleSpotifyCallback = async (token, refreshToken, expiresIn) => {
+  try {
+    // Store the tokens in localStorage with proper naming
+    localStorage.setItem("spotifyAccessToken", token);
+    localStorage.setItem("spotifyRefreshToken", refreshToken);
+    localStorage.setItem("spotifyTokenExpiry", Date.now() + expiresIn * 1000);
 
-  if (!response.ok) throw new Error("Failed to refresh token");
-
-  const data = await response.json();
-  localStorage.setItem("spotifyAccessToken", data.accessToken);
-  return data.accessToken;
+    // Verify the token by making a test request
+    await spotifyApi.get("/profile");
+    return true;
+  } catch (error) {
+    console.error("Error handling Spotify callback:", error);
+    return false;
+  }
 };
 
+export const refreshAccessToken = async () => {
+  try {
+    const refreshToken = localStorage.getItem("spotifyRefreshToken");
+    if (!refreshToken) {
+      throw new Error("No refresh token found");
+    }
+
+    const response = await spotifyApi.post("/refresh", { refreshToken });
+    const { accessToken, expiresIn } = response.data;
+
+    // Update stored tokens
+    localStorage.setItem("spotifyAccessToken", accessToken);
+    localStorage.setItem("spotifyTokenExpiry", Date.now() + expiresIn * 1000);
+
+    return accessToken;
+  } catch (error) {
+    console.error("Error refreshing token:", error);
+    // Clear tokens on refresh failure
+    localStorage.removeItem("spotifyAccessToken");
+    localStorage.removeItem("spotifyRefreshToken");
+    localStorage.removeItem("spotifyTokenExpiry");
+    localStorage.removeItem("spotify_connected");
+    throw error;
+  }
+};
+
+export const isTokenValid = () => {
+  const expiry = localStorage.getItem("spotifyTokenExpiry");
+  if (!expiry) return false;
+  return Date.now() < parseInt(expiry);
+};
+
+export const getValidToken = async () => {
+  if (!isTokenValid()) {
+    return await refreshAccessToken();
+  }
+  return localStorage.getItem("spotifyAccessToken");
+};
 
 export const getSpotifyProfile = async () => {
   try {
@@ -79,6 +119,7 @@ export const getSpotifyProfile = async () => {
     throw error;
   }
 };
+
 export const getUserPlaylists = async () => {
   try {
     const response = await spotifyApi.get("/playlists");
@@ -88,7 +129,7 @@ export const getUserPlaylists = async () => {
     throw error;
   }
 };
- 
+
 export const getLikedSongs = async (limit = 50, offset = 0) => {
   try {
     const response = await spotifyApi.get("/liked", {
@@ -104,7 +145,7 @@ export const getLikedSongs = async (limit = 50, offset = 0) => {
 export const getPlaylistTracks = async (playlistId) => {
   try {
     const response = await spotifyApi.get(`/playlists/${playlistId}/tracks`);
-    return response.data.tracks; // backend returns { success, tracks }
+    return response.data.tracks;
   } catch (error) {
     console.error("❌ Error getting playlist tracks:", error);
 
@@ -150,9 +191,11 @@ export const getCurrentPlaybackState = async () => {
   return response.json();
 };
 
-
 export const playTrack = async (trackUri, deviceId) => {
   try {
+    if (!deviceId) {
+      throw new Error("Device ID is required");
+    }
     await spotifyApi.post("/play", { trackUri, deviceId });
   } catch (error) {
     console.error("Error playing track:", error);
@@ -223,7 +266,6 @@ export const removeFromPlaylist = async (playlistId, trackUri) => {
   }
 };
 
-// Optional: Add method to check if track is liked
 export const isTrackLiked = async (trackId) => {
   try {
     const response = await spotifyApi.get("/is-liked", {

@@ -8,6 +8,18 @@ const { callSpotifyApi } = require("../utils/spotifyApiClient"); // use your cor
 const API_BASE = "http://localhost:3000/api/spotify";
 const CACHE_PREFIX = "spotify:";
 
+// Cache TTLs (in seconds)
+const CACHE_TTL = {
+    PROFILE: 1800,        // 30 minutes
+    PLAYLISTS: 3600,      // 1 hour
+    PLAYLIST_TRACKS: 1800, // 30 minutes
+    LIKED_SONGS: 1800,    // 30 minutes
+    CURRENT_PLAYBACK: 30,  // 30 seconds
+    TOP_TRACKS: 3600,     // 1 hour
+    TOP_ARTISTS: 3600,    // 1 hour
+    RECENT_TRACKS: 300    // 5 minutes
+};
+
 const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
 const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
 const REDIRECT_URI = process.env.SPOTIFY_REDIRECT_URI;
@@ -113,29 +125,187 @@ exports.exchangeTokenAndSaveUser = async (code, userId) => {
   };
 };
 
-// All API methods use callSpotifyApi now:
+// Enhanced caching wrapper
+const withCache = async (key, fetchFn, ttl, options = {}) => {
+    return redisClient.getWithCache(key, fetchFn, {
+        ttl,
+        compress: true, // Enable compression for large responses
+        prefix: CACHE_PREFIX,
+        ...options
+    });
+};
 
-exports.playTrack = async (userId, trackUri) =>
-  await callSpotifyApi(userId, async (token) =>
-    axios.put(
-      "https://api.spotify.com/v1/me/player/play",
-      trackUri ? { uris: [trackUri] } : {},
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
-    )
-  );
+// Cache invalidation helper
+const invalidateUserCache = async (userId) => {
+    const patterns = [
+        `profile:${userId}`,
+        `playlists:${userId}`,
+        `liked-songs:${userId}`,
+        `top-tracks:${userId}`,
+        `top-artists:${userId}`,
+        `recent-tracks:${userId}`
+    ];
+    
+    await Promise.all(patterns.map(pattern => 
+        redisClient.invalidateCache(pattern)
+    ));
+};
 
-exports.pauseTrack = async (userId) =>
-  await callSpotifyApi(userId, async (token) =>
-    axios.put(
-      "https://api.spotify.com/v1/me/player/pause",
-      {},
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
-    )
-  );
+// Profile (cached)
+exports.fetchSpotifyProfile = async (userId) => {
+    const cacheKey = getCacheKey(`profile:${userId}`);
+    return withCache(
+        cacheKey,
+        async () => {
+            return await callSpotifyApi(userId, async (token) => {
+                const res = await axios.get("https://api.spotify.com/v1/me", {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                return res.data;
+            });
+        },
+        CACHE_TTL.PROFILE
+    );
+};
+
+// Playlists (cached)
+exports.fetchUserPlaylists = async (userId) => {
+    const cacheKey = getCacheKey(`playlists:${userId}`);
+    return withCache(
+        cacheKey,
+        async () => {
+            return await callSpotifyApi(userId, async (token) => {
+                const res = await axios.get("https://api.spotify.com/v1/me/playlists", {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                return res.data;
+            });
+        },
+        CACHE_TTL.PLAYLISTS
+    );
+};
+
+// Playlist Tracks (cached)
+exports.getPlaylistTracks = async (userId, playlistId) => {
+    const cacheKey = getCacheKey(`playlist-tracks:${userId}:${playlistId}`);
+    return withCache(
+        cacheKey,
+        async () => {
+            return await callSpotifyApi(userId, async (token) => {
+                const allTracks = [];
+                const limit = 100;
+                let offset = 0;
+                let totalFetched = 0;
+
+                while (totalFetched < 300) {
+                    const response = await axios.get(
+                        `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
+                        {
+                            headers: {
+                                Authorization: `Bearer ${token}`,
+                                "Content-Type": "application/json",
+                            },
+                            params: {
+                                limit,
+                                offset,
+                                fields: "items(track(id,name,uri,duration_ms,artists(name),album(name,images))),next",
+                            },
+                        }
+                    );
+
+                    const tracks = response.data.items.map(item => item.track);
+                    allTracks.push(...tracks);
+                    totalFetched += tracks.length;
+
+                    if (!response.data.next || totalFetched >= 300) break;
+                    offset += limit;
+                }
+
+                return allTracks;
+            });
+        },
+        CACHE_TTL.PLAYLIST_TRACKS
+    );
+};
+
+// Liked Songs (cached)
+exports.getLikedSongs = async (userId) => {
+    const cacheKey = getCacheKey(`liked-songs:${userId}`);
+    return withCache(
+        cacheKey,
+        async () => {
+            return await callSpotifyApi(userId, async (token) => {
+                const allTracks = [];
+                const limit = 50;
+                let offset = 0;
+
+                while (true) {
+                    const response = await axios.get(
+                        "https://api.spotify.com/v1/me/tracks",
+                        {
+                            headers: { Authorization: `Bearer ${token}` },
+                            params: { limit, offset },
+                        }
+                    );
+
+                    const tracks = response.data.items.map(item => item.track);
+                    allTracks.push(...tracks);
+
+                    if (!response.data.next) break;
+                    offset += limit;
+                }
+
+                return allTracks;
+            });
+        },
+        CACHE_TTL.LIKED_SONGS
+    );
+};
+
+// Current Playback (cached with short TTL)
+exports.getCurrentPlaybackState = async (userId) => {
+    const cacheKey = getCacheKey(`playback:${userId}`);
+    return withCache(
+        cacheKey,
+        async () => {
+            return await callSpotifyApi(userId, async (token) => {
+                const res = await axios.get("https://api.spotify.com/v1/me/player", {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                return res.data;
+            });
+        },
+        CACHE_TTL.CURRENT_PLAYBACK
+    );
+};
+
+// Invalidate cache when user makes changes
+exports.playTrack = async (userId, trackUri, deviceId) => {
+    await invalidateUserCache(userId);
+    return await callSpotifyApi(userId, async (token) =>
+        axios.put(
+            "https://api.spotify.com/v1/me/player/play",
+            trackUri ? { uris: [trackUri] } : {},
+            {
+                headers: { Authorization: `Bearer ${token}` },
+                params: { device_id: deviceId }
+            }
+        )
+    );
+};
+
+exports.pauseTrack = async (userId) => {
+    await invalidateUserCache(userId);
+    return await callSpotifyApi(userId, async (token) =>
+        axios.put(
+            "https://api.spotify.com/v1/me/player/pause",
+            {},
+            {
+                headers: { Authorization: `Bearer ${token}` },
+            }
+        )
+    );
+};
 
 exports.resumeTrack = async (userId) => exports.playTrack(userId);
 

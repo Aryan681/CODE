@@ -1,11 +1,8 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
-const redis = require('redis');
+const redisClient = require('../utils/redisClient');
 const logger = require('../utils/logger');
 const { hashPassword } = require('../services/authService'); 
-// Initialize Redis client
-const redisClient = redis.createClient({ url: process.env.REDIS_URL });
-redisClient.connect().catch(console.error);
 
 // Get user by ID
 const getUser = async (req, res, next) => {

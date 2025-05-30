@@ -1,17 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const axios = require('axios');
-const { createClient } = require('redis');
+const redisClient = require('../utils/redisClient');
 const prisma = new PrismaClient();
-
-// Redis client setup
-let redisClient;
-(async () => {
-  redisClient = createClient({
-    url: process.env.REDIS_URL || 'redis://localhost:6379'
-  });
-  redisClient.on('error', err => console.error('Redis Client Error:', err));
-  await redisClient.connect();
-})();
 
 /**
  * Gets GitHub access token from Redis or database

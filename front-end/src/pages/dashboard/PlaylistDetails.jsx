@@ -2,14 +2,14 @@ import { useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { getPlaylistTracks, getUserPlaylists, playTrack } from "../../features/spotify/Services/spotifyService";
 import { FiMusic } from "react-icons/fi";
-import SpotifyController from "../../features/spotify/component/PLAY/SpotifyPlayer";
+import { useSpotifyPlayerContext } from "../../features/spotify/context/SpotifyPlayerContext";
 
 const PlaylistDetails = () => {
   const { playlistId } = useParams();
   const [tracks, setTracks] = useState([]);
   const [playlist, setPlaylist] = useState(null);
-  const [currentTrackUri, setCurrentTrackUri] = useState(null);
-  const [deviceId, setDeviceId] = useState(null); // Optional: if you manage deviceId separately
+  const { deviceId, isPlayerReady } = useSpotifyPlayerContext();
+
   const formatDuration = (ms) => {
     const minutes = Math.floor(ms / 60000);
     const seconds = Math.floor((ms % 60000) / 1000);
@@ -34,9 +34,13 @@ const PlaylistDetails = () => {
   }, [playlistId]);
 
   const handleTrackClick = async (trackUri) => {
+    if (!isPlayerReady || !deviceId) {
+      console.error("Player not ready or no device ID available");
+      return;
+    }
+
     try {
       await playTrack(trackUri, deviceId);
-      setCurrentTrackUri(trackUri);
     } catch (error) {
       console.error("Failed to play track:", error);
     }
@@ -96,13 +100,6 @@ const PlaylistDetails = () => {
           </div>
         ))}
       </div>
-
-      {/* 👇 Spotify controller shows when a track is selected */}
-      {currentTrackUri && (
-        <div className="fixed bottom-0 left-0 w-full z-50">
-          <SpotifyController trackUri={currentTrackUri} deviceId={deviceId} />
-        </div>
-      )}
     </div>
   );
 };

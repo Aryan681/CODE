@@ -3,6 +3,8 @@ import { BrowserRouter as Router } from 'react-router-dom';
 import AppRoutes from './router/AppRoutes';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { SpotifyPlayerProvider } from './features/spotify/context/SpotifyPlayerContext';
+import GlobalSpotifyPlayer from './features/spotify/component/GlobalSpotifyPlayer';
 
 // Register GSAP plugins
 gsap.registerPlugin(ScrollTrigger);
@@ -19,7 +21,10 @@ function App() {
 
   return (
     <Router>
-      <AppRoutes />
+      <SpotifyPlayerProvider>
+        <AppRoutes />
+        <GlobalSpotifyPlayer />
+      </SpotifyPlayerProvider>
     </Router>
   );
 }

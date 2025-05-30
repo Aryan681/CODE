@@ -3,11 +3,10 @@ const argon2 = require('argon2');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const { PrismaClient } = require('@prisma/client');
-const Redis = require('ioredis');
+const redisClient = require('../utils/redisClient');
 const logger = require('../utils/logger');
 
 const prisma = new PrismaClient();
-const redis = new Redis(process.env.REDIS_URL);
 
 // JWT configuration
 const accessTokenExpiration = process.env.JWT_ACCESS_EXPIRATION || '15m';
@@ -97,7 +96,7 @@ const generateAuthTokens = async (user) => {
   );
 
   // Store refresh token in Redis (linked to jti)
-  await redis.set(`refresh_token:${jti}`, user.id, 'EX', 7 * 24 * 60 * 60); // 7 days
+  await redisClient.set(`refresh_token:${jti}`, user.id, 'EX', 7 * 24 * 60 * 60); // 7 days
 
   return { accessToken, refreshToken };
 };
@@ -113,7 +112,7 @@ const refreshAuthTokens = async (refreshToken) => {
     const { userId, jti } = payload;
 
     // Check if the refresh token exists in Redis (ensure token is still valid)
-    const storedUserId = await redis.get(`refresh_token:${jti}`);
+    const storedUserId = await redisClient.get(`refresh_token:${jti}`);
     if (!storedUserId || storedUserId !== userId) {
       logger.error('Refresh token is invalid or expired');
       return { error: 'Invalid or expired refresh token' };
@@ -130,7 +129,7 @@ const refreshAuthTokens = async (refreshToken) => {
     const newTokens = await generateAuthTokens(user);
 
     // Remove old refresh token from Redis
-    await redis.del(`refresh_token:${jti}`);
+    await redisClient.del(`refresh_token:${jti}`);
 
     return newTokens;
   } catch (error) {
@@ -148,7 +147,7 @@ const invalidateRefreshToken = async (refreshToken) => {
     );
     
     const { jti } = payload;
-    await redis.del(`refresh_token:${jti}`);
+    await redisClient.del(`refresh_token:${jti}`);
     return true;
   } catch (error) {
     logger.error('Invalidate refresh token error:', error);

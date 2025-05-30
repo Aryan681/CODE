@@ -1,9 +1,7 @@
 // middleware/rateLimiter.js
 const { RateLimiterRedis } = require('rate-limiter-flexible');
-const Redis = require('ioredis');
+const redisClient = require('../utils/redisClient');
 const logger = require('../utils/logger');
-
-const redisClient = new Redis(process.env.REDIS_URL);
 
 const rateLimiterOptions = {
   storeClient: redisClient,
