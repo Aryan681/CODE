@@ -191,12 +191,16 @@ export const getCurrentPlaybackState = async () => {
   return response.json();
 };
 
-export const playTrack = async (trackUri, deviceId) => {
+export const playTrack = async (trackUri, deviceId, position = 0) => {
   try {
     if (!deviceId) {
       throw new Error("Device ID is required");
     }
-    await spotifyApi.post("/play", { trackUri, deviceId });
+    await spotifyApi.post("/play", { 
+      trackUri, 
+      deviceId,
+      position_ms: position 
+    });
   } catch (error) {
     console.error("Error playing track:", error);
     throw error;
