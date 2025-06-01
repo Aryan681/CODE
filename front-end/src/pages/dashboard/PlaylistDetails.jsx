@@ -1,13 +1,16 @@
 import { useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { getPlaylistTracks, getUserPlaylists, playTrack } from "../../features/spotify/Services/spotifyService";
-import { FiMusic, FiPlay, FiPause } from "react-icons/fi";
+import { FiMusic, FiPlay, FiPause, FiClock, FiUser, FiCalendar } from "react-icons/fi";
 import { useSpotifyPlayerContext } from "../../features/spotify/context/SpotifyPlayerContext";
+import SpotifyLoader from "../../features/spotify/component/common/SpotifyLoader";
 
 const PlaylistDetails = () => {
   const { playlistId } = useParams();
   const [tracks, setTracks] = useState([]);
   const [playlist, setPlaylist] = useState(null);
+  const [loading, setLoading] = useState(true);
   const { deviceId, isPlayerReady, isPlaying, currentTrack } = useSpotifyPlayerContext();
 
   const formatDuration = (ms) => {
@@ -15,10 +18,16 @@ const PlaylistDetails = () => {
     const seconds = Math.floor((ms % 60000) / 1000);
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   };
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  };
   
   useEffect(() => {
     const fetchPlaylistData = async () => {
       try {
+        setLoading(true);
         const playlistData = await getUserPlaylists();
         const currentPlaylist = playlistData.find(pl => pl.id === playlistId);
         setPlaylist(currentPlaylist);
@@ -27,6 +36,8 @@ const PlaylistDetails = () => {
         setTracks(data);
       } catch (error) {
         console.error("Failed to fetch playlist data:", error.message);
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -46,41 +57,95 @@ const PlaylistDetails = () => {
     }
   };
 
-  if (!playlist) return <div>Loading...</div>;
+  if (loading) {
+    return <SpotifyLoader message="Loading Playlist" />;
+  }
+
+  if (!playlist) return null;
 
   return (
-    <div className="bg-gradient-to-b from-gray-900 to-black text-white min-h-screen">
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="bg-gradient-to-b from-gray-900 to-black text-white min-h-screen"
+    >
       {/* Playlist Header */}
       <div className="relative">
         <div className="absolute inset-0 bg-gradient-to-b from-[#1DB954]/20 to-transparent" />
-        <div className="relative px-8 pt-8 pb-4">
-          <div className="flex items-end gap-6">
-            <div className="w-48 h-48 shadow-2xl">
+        <motion.div 
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.5 }}
+          className="relative px-8 pt-8 pb-4"
+        >
+          <div className="flex flex-col md:flex-row items-center md:items-end gap-6">
+            <motion.div 
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.2 }}
+              className="w-48 h-48 shadow-2xl"
+            >
               <img
                 src={playlist.coverImage}
                 alt={playlist.name}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover rounded-lg"
               />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium mb-2">PLAYLIST</p>
-              <h1 className="text-6xl font-bold mb-4">{playlist.name}</h1>
-              <p className="text-gray-300">{playlist.description}</p>
-            </div>
+            </motion.div>
+            <motion.div 
+              initial={{ x: -20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="flex-1 text-center md:text-left"
+            >
+              <p className="text-sm font-medium mb-2 text-[#1DB954]">PLAYLIST</p>
+              <h1 className="text-4xl md:text-6xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-white to-[#1db954]">
+                {playlist.name}
+              </h1>
+              <p className="text-gray-300 mb-4">{playlist.description}</p>
+              
+              <div className="flex flex-wrap justify-center md:justify-start gap-4 text-sm text-gray-400">
+                <div className="flex items-center gap-2">
+                  <FiUser className="text-[#1DB954]" />
+                  <span>{playlist.owner}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <FiMusic className="text-[#1DB954]" />
+                  <span>{tracks.length} songs</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <FiClock className="text-[#1DB954]" />
+                  <span>{formatDuration(tracks.reduce((acc, track) => acc + track.duration, 0))}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <FiCalendar className="text-[#1DB954]" />
+                  <span>Created {formatDate(playlist.createdAt)}</span>
+                </div>
+              </div>
+            </motion.div>
           </div>
-        </div>
+        </motion.div>
       </div>
 
       {/* Play Button */}
-      <div className="px-8 py-4">
-        <button className="bg-[#1DB954] hover:bg-[#1ed760] text-black font-bold py-3 px-8 rounded-full flex items-center gap-2">
+      <motion.div 
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.4 }}
+        className="px-8 py-4"
+      >
+        <button className="bg-[#1DB954] hover:bg-[#1ed760] text-black font-bold py-3 px-8 rounded-full flex items-center gap-2 transition-all duration-300 hover:scale-105">
           <FiPlay className="w-6 h-6" />
           PLAY
         </button>
-      </div>
+      </motion.div>
 
       {/* Tracks List */}
-      <div className="px-8">
+      <motion.div 
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.5 }}
+        className="px-8"
+      >
         <div className="grid grid-cols-12 gap-4 text-gray-400 text-sm uppercase tracking-wider border-b border-gray-800 pb-2">
           <div className="col-span-1 text-center">#</div>
           <div className="col-span-5">Title</div>
@@ -88,11 +153,14 @@ const PlaylistDetails = () => {
           <div className="col-span-1 text-right">Time</div>
         </div>
 
-        <div>
+        <AnimatePresence>
           {tracks.map((track, index) => (
-            <div
+            <motion.div
               key={track.id}
-              className="grid grid-cols-12 gap-4 items-center py-3 px-2 rounded hover:bg-gray-800/50 group text-sm cursor-pointer"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.05 }}
+              className="grid grid-cols-12 gap-4 items-center py-3 px-2 rounded hover:bg-gray-800/50 group text-sm cursor-pointer transition-colors duration-200"
               onClick={() => handleTrackClick(track.uri)}
             >
               <div className="col-span-1 text-center text-gray-400 group-hover:text-white">
@@ -104,7 +172,7 @@ const PlaylistDetails = () => {
               </div>
 
               <div className="col-span-5 flex items-center gap-3">
-                <div className="w-10 h-10 bg-gray-700 flex-shrink-0">
+                <div className="w-10 h-10 bg-gray-700 flex-shrink-0 rounded overflow-hidden">
                   {track.album.image ? (
                     <img
                       src={track.album.image}
@@ -132,11 +200,11 @@ const PlaylistDetails = () => {
               <div className="col-span-1 text-right text-gray-400">
                 {formatDuration(track.duration)}
               </div>
-            </div>
+            </motion.div>
           ))}
-        </div>
-      </div>
-    </div>
+        </AnimatePresence>
+      </motion.div>
+    </motion.div>
   );
 };
 

@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { getSpotifyProfile, isTokenValid, getValidToken } from "../../features/spotify/Services/spotifyService";
 import ConnectSpotify from "../../features/spotify/component/ConnectSpotify";
 import SpotifyProfile from "../../features/spotify/component/SpotifyProfile";
+import SpotifyLoader from "../../features/spotify/component/common/SpotifyLoader";
 import useSpotifyPlayer from "../../features/spotify/hooks/useSpotifyPlayer";
 import "../../features/spotify/Spotify.css";
 
@@ -68,7 +69,7 @@ function SpotifyPage() {
   }, []);
 
   if (loading) {
-    return <div>Loading...</div>;
+    return <SpotifyLoader message="Connecting to Spotify" />;
   }
 
   if (!isConnected) {
