@@ -37,28 +37,30 @@ export const usePlayerHandlers = (player, deviceId, currentTrack, isPlaying, sta
           if (savedTrack) {
             const track = JSON.parse(savedTrack);
             try {
-              // First seek to the saved position
+              // First play the track
+              await playTrack(track.uri, currentDeviceId);
+              // Then seek to the saved position
               if (savedPosition) {
                 await player.seek(parseInt(savedPosition));
               }
-              // Then play the track
-              await playTrack(track.uri, currentDeviceId);
             } catch (error) {
               console.error('Error playing saved track:', error);
             }
             return;
           }
         } else {
-          // For existing track, first seek to saved position then resume
+          // For existing track, first play then seek to saved position
           const savedPosition = localStorage.getItem('spotifyPosition');
-          if (savedPosition) {
-            try {
+          try {
+            // First play the track
+            await playTrack(currentTrack.uri, currentDeviceId);
+            // Then seek to the saved position
+            if (savedPosition) {
               await player.seek(parseInt(savedPosition));
-            } catch (error) {
-              console.error('Error seeking to position:', error);
             }
+          } catch (error) {
+            console.error('Error playing track:', error);
           }
-          await resumeTrack();
         }
       }
     } catch (err) {

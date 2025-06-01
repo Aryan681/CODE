@@ -14,8 +14,14 @@ if (!window.onSpotifyWebPlaybackSDKReady) {
 export default function useSpotifyPlayer(token) {
   const [player, setPlayer] = useState(globalPlayerInstance);
   const [deviceId, setDeviceId] = useState(globalDeviceId);
-  const [currentTrack, setCurrentTrack] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTrack, setCurrentTrack] = useState(() => {
+    const savedTrack = localStorage.getItem('spotifyCurrentTrack');
+    return savedTrack ? JSON.parse(savedTrack) : null;
+  });
+  const [isPlaying, setIsPlaying] = useState(() => {
+    const savedState = localStorage.getItem('spotifyIsPlaying');
+    return savedState === 'true';
+  });
   const [error, setError] = useState(null);
   const [isReady, setIsReady] = useState(false);
 
@@ -149,6 +155,25 @@ export default function useSpotifyPlayer(token) {
 
           // Activate the device
           await activateDevice(device_id, validToken);
+
+          // Restore playback state if we have a saved track
+          const savedTrack = localStorage.getItem('spotifyCurrentTrack');
+          const savedPosition = localStorage.getItem('spotifyPosition');
+
+          if (savedTrack) {
+            try {
+              const track = JSON.parse(savedTrack);
+              // First seek to the saved position
+              if (savedPosition) {
+                await playerInstance.seek(parseInt(savedPosition));
+              }
+              // Always start in paused state after reload
+              setIsPlaying(false);
+              localStorage.setItem('spotifyIsPlaying', 'false');
+            } catch (error) {
+              console.error('Error restoring playback state:', error);
+            }
+          }
         });
 
         playerInstance.addListener("not_ready", ({ device_id }) => {
@@ -161,8 +186,13 @@ export default function useSpotifyPlayer(token) {
 
         playerInstance.addListener("player_state_changed", state => {
           if (!state) return;
-          setCurrentTrack(state.track_window.current_track);
+          const track = state.track_window.current_track;
+          setCurrentTrack(track);
           setIsPlaying(!state.paused);
+          // Store track and playing state in localStorage
+          localStorage.setItem('spotifyCurrentTrack', JSON.stringify(track));
+          localStorage.setItem('spotifyIsPlaying', (!state.paused).toString());
+          localStorage.setItem('spotifyPosition', state.position.toString());
         });
 
         // Connect the player
