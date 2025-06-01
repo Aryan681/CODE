@@ -165,6 +165,24 @@ const DashboardLayout = () => {
     };
   }, [isSidebarCollapsed]);
 
+  // Add click outside handler
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      // Check if sidebar is expanded and click is outside
+      if (!isSidebarCollapsed && sidebarRef.current && !sidebarRef.current.contains(event.target)) {
+        setIsSidebarCollapsed(true);
+      }
+    };
+
+    // Add event listener
+    document.addEventListener('mousedown', handleClickOutside);
+
+    // Cleanup
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isSidebarCollapsed]);
+
   const handleFeatureClick = (featureId) => {
     setActiveFeature(featureId);
     switch (featureId) {

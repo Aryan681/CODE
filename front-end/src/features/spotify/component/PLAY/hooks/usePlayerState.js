@@ -17,7 +17,7 @@ export const usePlayerState = (player, isPlaying) => {
   const [duration, setDuration] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Apply saved volume when player is ready
+  // Apply saved volume when player is ready or when track changes
   useEffect(() => {
     if (player) {
       const applyVolume = async () => {
@@ -25,13 +25,15 @@ export const usePlayerState = (player, isPlaying) => {
           const savedVolume = localStorage.getItem('spotifyVolume');
           const volumeToApply = savedVolume ? parseInt(savedVolume) / 100 : 0.5;
           await player.setVolume(volumeToApply);
+          // Update state to match the applied volume
+          setVolume(parseInt(savedVolume) || 50);
         } catch (error) {
           console.error('Error applying volume:', error);
         }
       };
       applyVolume();
     }
-  }, [player]);
+  }, [player, isPlaying]); // Re-apply volume when track changes
 
   // Track playback position and duration
   useEffect(() => {

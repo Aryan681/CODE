@@ -14,6 +14,22 @@ export const usePlayerHandlers = (player, deviceId, currentTrack, isPlaying, sta
     setIsDragging
   } = state;
 
+  const handleClose = useCallback(async () => {
+    try {
+      // Stop playback
+      if (player) {
+        await player.pause();
+      }
+      // Clear all track-related data from localStorage
+      localStorage.removeItem('spotifyCurrentTrack');
+      localStorage.removeItem('spotifyPosition');
+      localStorage.removeItem('spotifyIsPlaying');
+      localStorage.removeItem('spotifyTrackId');
+    } catch (error) {
+      console.error('Error closing player:', error);
+    }
+  }, [player]);
+
   const handlePlayPause = useCallback(async () => {
     const currentDeviceId = deviceId || localStorage.getItem('spotifyDeviceId');
     if (!currentDeviceId) {
@@ -132,6 +148,7 @@ export const usePlayerHandlers = (player, deviceId, currentTrack, isPlaying, sta
     handleVolumeChange,
     handleMuteToggle,
     handleSeek,
-    formatTime
+    formatTime,
+    handleClose
   };
 }; 

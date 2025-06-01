@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLocation } from 'react-router-dom';
 import { useSpotifyPlayerContext } from '../../context/SpotifyPlayerContext';
 import { usePlayerState } from './hooks/usePlayerState';
 import { usePlayerHandlers } from './hooks/usePlayerHandlers';
@@ -8,6 +9,7 @@ import ProgressBar from './components/ProgressBar';
 import VolumeControl from './components/VolumeControl';
 
 const GlobalSpotifyPlayer = () => {
+  const location = useLocation();
   const { player, deviceId, currentTrack, isPlaying } = useSpotifyPlayerContext();
   const state = usePlayerState(player, isPlaying);
   const handlers = usePlayerHandlers(player, deviceId, currentTrack, isPlaying, state);
@@ -40,8 +42,17 @@ const GlobalSpotifyPlayer = () => {
   // After reload, always show as paused initially
   const displayIsPlaying = currentTrack ? isPlaying : false;
 
+  // Check if we're in the dashboard layout
+  const isDashboardLayout = location.pathname.startsWith('/dashboard');
+
   return (
-    <div className="fixed bottom-0 left-21.5 right-4 bg-gradient-to-r from-[#181818] to-[#282828] border-t border-[#282828] p-2 z-50 backdrop-blur-md bg-opacity-95">
+    <div 
+      className={`fixed bottom-0 bg-gradient-to-r from-[#181818] to-[#282828] border-t border-[#282828] p-2 z-10 backdrop-blur-md bg-opacity-95 transition-all duration-300 ${
+        isDashboardLayout 
+          ? 'left-0 right-0 max-w-screen-xl mx-auto rounded-xl bottom-4' // Same style as other pages
+          : 'left-0 right-0 max-w-screen-xl mx-auto rounded-xl bottom-4' // Full width for other pages
+      }`}
+    >
       <div className="max-w-screen-xl mx-auto flex items-center justify-between">
         <TrackInfo currentTrack={trackToDisplay} />
         <div className="flex flex-col items-center gap-2 flex-1 max-w-2xl px-8">
