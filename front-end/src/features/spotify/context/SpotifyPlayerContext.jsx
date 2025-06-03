@@ -17,6 +17,8 @@ export const SpotifyPlayerProvider = ({ children }) => {
   const [isShuffled, setIsShuffled] = useState(false);
   const [queue, setQueue] = useState([]);
   const [currentQueueIndex, setCurrentQueueIndex] = useState(-1);
+  const [currentPlaylistId, setCurrentPlaylistId] = useState(null);
+  const [originalTracks, setOriginalTracks] = useState([]); // Store original tracks for queue management
   const token = localStorage.getItem('spotifyAccessToken');
 
   const { player, currentTrack, isPlaying, error } = useSpotifyPlayer(token);
@@ -33,7 +35,8 @@ export const SpotifyPlayerProvider = ({ children }) => {
   const toggleShuffle = async () => {
     if (!deviceId || !token) return;
     try {
-      const response = await fetch(`https://api.spotify.com/v1/me/player/shuffle?state=${!isShuffled}`, {
+      const newShuffleState = !isShuffled;
+      const response = await fetch(`https://api.spotify.com/v1/me/player/shuffle?state=${newShuffleState}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -42,7 +45,23 @@ export const SpotifyPlayerProvider = ({ children }) => {
       });
 
       if (response.ok) {
-        setIsShuffled(!isShuffled);
+        setIsShuffled(newShuffleState);
+        // If we have tracks in the queue, reorder them based on new shuffle state
+        if (queue.length > 0) {
+          if (newShuffleState) {
+            // Shuffle the current queue
+            const shuffledQueue = [...queue].sort(() => Math.random() - 0.5);
+            setQueue(shuffledQueue);
+          } else {
+            // Sort queue back to original order based on track URIs
+            const sortedQueue = [...queue].sort((a, b) => {
+              const aIndex = tracks.findIndex(t => t.uri === a.uri);
+              const bIndex = tracks.findIndex(t => t.uri === b.uri);
+              return aIndex - bIndex;
+            });
+            setQueue(sortedQueue);
+          }
+        }
       } else {
         throw new Error('Failed to toggle shuffle');
       }
@@ -51,11 +70,26 @@ export const SpotifyPlayerProvider = ({ children }) => {
     }
   };
 
-  const playPlaylist = async (playlistId, startWithRandom = false) => {
+  const playPlaylist = async (playlistId, tracks, startWithRandom = false) => {
     if (!deviceId || !token) return;
     try {
-      // First enable shuffle if requested
-      if (startWithRandom) {
+      // Clear existing queue
+      clearQueue();
+      setCurrentPlaylistId(playlistId);
+      setOriginalTracks(tracks); // Store original tracks
+
+      // Add playlist context to each track
+      const tracksWithContext = tracks.map(track => ({
+        ...track,
+        playlistContext: playlistId
+      }));
+
+      if (isShuffled) {
+        // Shuffle the tracks array
+        const shuffledTracks = [...tracksWithContext].sort(() => Math.random() - 0.5);
+        addToQueue(shuffledTracks);
+        
+        // Enable shuffle mode
         await fetch(`https://api.spotify.com/v1/me/player/shuffle?state=true`, {
           method: 'PUT',
           headers: {
@@ -63,10 +97,22 @@ export const SpotifyPlayerProvider = ({ children }) => {
             'Content-Type': 'application/json'
           }
         });
-        setIsShuffled(true);
+      } else {
+        // Add tracks in sequence
+        addToQueue(tracksWithContext);
+        
+        // Disable shuffle mode
+        await fetch(`https://api.spotify.com/v1/me/player/shuffle?state=false`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
       }
 
-      // Start playing the playlist
+      // Start playing the playlist from the first track
+      const firstTrack = isShuffled ? queue[0] : tracksWithContext[0];
       const response = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
         method: 'PUT',
         headers: {
@@ -74,13 +120,16 @@ export const SpotifyPlayerProvider = ({ children }) => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          context_uri: `spotify:playlist:${playlistId}`
+          uris: [firstTrack.uri]
         })
       });
 
       if (!response.ok) {
         throw new Error('Failed to play playlist');
       }
+
+      // Set the current queue index to 0 since we're starting from the first track
+      setCurrentQueueIndex(0);
     } catch (error) {
       console.error('Failed to play playlist:', error);
     }
@@ -93,6 +142,36 @@ export const SpotifyPlayerProvider = ({ children }) => {
   const clearQueue = () => {
     setQueue([]);
     setCurrentQueueIndex(-1);
+  };
+
+  const playTrack = async (trackUri, playlistId = null) => {
+    if (!deviceId || !token) return;
+    try {
+      // Don't clear the queue, just update the current playlist ID
+      setCurrentPlaylistId(playlistId);
+
+      // Start playing the selected track
+      const response = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          uris: [trackUri]
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to play track');
+      }
+
+      // Find the track in the queue and set its index
+      const trackIndex = queue.findIndex(track => track.uri === trackUri);
+      setCurrentQueueIndex(trackIndex);
+    } catch (error) {
+      console.error('Failed to play track:', error);
+    }
   };
 
   const playNext = async () => {
@@ -113,6 +192,36 @@ export const SpotifyPlayerProvider = ({ children }) => {
           })
         });
         setCurrentQueueIndex(nextIndex);
+      } else if (originalTracks.length > 0) {
+        // If we're at the end of the queue, add more tracks
+        const remainingTracks = originalTracks.slice(queue.length);
+        if (remainingTracks.length > 0) {
+          const tracksToAdd = isShuffled 
+            ? [...remainingTracks].sort(() => Math.random() - 0.5)
+            : remainingTracks;
+          
+          // Add tracks with playlist context
+          const tracksWithContext = tracksToAdd.map(track => ({
+            ...track,
+            playlistContext: currentPlaylistId
+          }));
+          
+          addToQueue(tracksWithContext);
+          
+          // Play the first track from the newly added tracks
+          const nextTrack = tracksWithContext[0];
+          await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+            method: 'PUT',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              uris: [nextTrack.uri]
+            })
+          });
+          setCurrentQueueIndex(queue.length);
+        }
       }
     } catch (error) {
       console.error('Failed to play next track:', error);
@@ -143,15 +252,45 @@ export const SpotifyPlayerProvider = ({ children }) => {
     }
   };
 
+  // Add new tracks to queue when current track changes
+  useEffect(() => {
+    if (currentTrack && originalTracks.length > 0) {
+      const currentIndex = originalTracks.findIndex(track => track.id === currentTrack.id);
+      
+      if (currentIndex !== -1) {
+        // If we're near the end of the queue, add more tracks
+        if (queue.length - currentQueueIndex <= 3) {
+          const remainingTracks = originalTracks.slice(currentIndex + 1);
+          if (remainingTracks.length > 0) {
+            const tracksToAdd = isShuffled 
+              ? [...remainingTracks].sort(() => Math.random() - 0.5)
+              : remainingTracks;
+            
+            // Add tracks with playlist context
+            const tracksWithContext = tracksToAdd.map(track => ({
+              ...track,
+              playlistContext: currentPlaylistId
+            }));
+            
+            addToQueue(tracksWithContext);
+          }
+        }
+      }
+    }
+  }, [currentTrack, currentQueueIndex, queue.length, originalTracks, isShuffled, currentPlaylistId]);
+
   // Update currentQueueIndex when currentTrack changes
   useEffect(() => {
     if (currentTrack && queue.length > 0) {
-      const index = queue.findIndex(track => track.id === currentTrack.id);
+      const index = queue.findIndex(track => 
+        track.id === currentTrack.id && 
+        track.playlistContext === currentPlaylistId
+      );
       if (index !== -1) {
         setCurrentQueueIndex(index);
       }
     }
-  }, [currentTrack, queue]);
+  }, [currentTrack, queue, currentPlaylistId]);
 
   useEffect(() => {
     if (player) {
@@ -218,13 +357,15 @@ export const SpotifyPlayerProvider = ({ children }) => {
     togglePlayPause,
     toggleShuffle,
     playPlaylist,
+    playTrack,
     isShuffled,
     queue,
     addToQueue,
     clearQueue,
     playNext,
     playPrevious,
-    currentQueueIndex
+    currentQueueIndex,
+    currentPlaylistId
   };
 
   return (

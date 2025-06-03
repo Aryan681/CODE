@@ -23,7 +23,8 @@ const PlaylistDetails = () => {
     addToQueue,
     clearQueue,
     queue,
-    currentQueueIndex
+    currentPlaylistId,
+    playTrack
   } = useSpotifyPlayerContext();
 
   const formatDuration = (ms) => {
@@ -64,17 +65,31 @@ const PlaylistDetails = () => {
     }
   }, [tracks]);
 
-  const handleTrackClick = async (trackUri) => {
+  const handleTrackClick = async (track) => {
     if (!isPlayerReady || !deviceId) {
       console.error("Player not ready or no device ID available");
       return;
     }
 
     try {
-      await playTrack(trackUri, deviceId);
+      // If the clicked track is already playing, toggle play/pause
+      if (isTrackFromCurrentPlaylist(track)) {
+        await togglePlayPause();
+      } else {
+        // Play the selected track immediately
+        await playTrack(track.uri, playlistId);
+      }
     } catch (error) {
       console.error("Failed to play track:", error);
     }
+  };
+
+  const isTrackFromCurrentPlaylist = (track) => {
+    return currentPlaylistId === playlistId && track.uri === currentTrack?.uri;
+  };
+
+  const isPlaylistPlaying = () => {
+    return currentPlaylistId === playlistId && isPlaying;
   };
 
   const handlePlayPlaylist = async () => {
@@ -85,17 +100,14 @@ const PlaylistDetails = () => {
 
     try {
       // Check if current track is from this playlist
-      const isCurrentTrackFromPlaylist = tracks.some(track => track.id === currentTrack?.id);
+      const isCurrentTrackFromPlaylist = tracks.some(track => track.uri === currentTrack?.uri);
       
       if (isCurrentTrackFromPlaylist) {
         // If current track is from this playlist, toggle play/pause
         await togglePlayPause();
       } else {
-        // Clear existing queue and add new tracks
-        clearQueue();
-        addToQueue(tracks);
-        // Start playing the playlist with shuffle enabled
-        await playPlaylist(playlistId, true);
+        // Start playing the playlist respecting current shuffle state
+        await playPlaylist(playlistId, tracks);
       }
     } catch (error) {
       console.error("Failed to play playlist:", error);
@@ -182,12 +194,12 @@ const PlaylistDetails = () => {
           onClick={handlePlayPlaylist}
           className="bg-[#1DB954] hover:bg-[#1ed760] text-black font-bold py-3 px-8 rounded-full flex items-center gap-2 transition-all duration-300 hover:scale-105"
         >
-          {tracks.some(track => track.id === currentTrack?.id) && isPlaying ? (
+          {isPlaylistPlaying() ? (
             <FiPause className="w-6 h-6" />
           ) : (
             <FiPlay className="w-6 h-6" />
           )}
-          {tracks.some(track => track.id === currentTrack?.id) && isPlaying ? "PAUSE" : "PLAY"}
+          {isPlaylistPlaying() ? "PAUSE" : "PLAY"}
         </button>
 
         <button
@@ -222,12 +234,13 @@ const PlaylistDetails = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
+              onClick={() => handleTrackClick(track)}
               className={`grid grid-cols-12 gap-4 items-center py-3 px-2 rounded hover:bg-gray-800/50 group text-sm cursor-pointer transition-colors duration-200 ${
-                currentQueueIndex === index ? 'bg-gray-800/50' : ''
+                isTrackFromCurrentPlaylist(track) ? 'bg-gray-800/50' : ''
               }`}
             >
               <div className="col-span-1 text-center text-gray-400 group-hover:text-white">
-                {currentTrack?.id === track.id ? (
+                {isTrackFromCurrentPlaylist(track) ? (
                   isPlaying ? <FiPause className="mx-auto" /> : <FiPlay className="mx-auto" />
                 ) : (
                   index + 1
@@ -249,18 +262,36 @@ const PlaylistDetails = () => {
                   )}
                 </div>
                 <div>
-                  <p className={`text-white font-medium truncate ${currentTrack?.id === track.id ? 'text-[#1DB954]' : ''}`}>
+                  <p className={`font-medium truncate ${
+                    isTrackFromCurrentPlaylist(track) 
+                      ? 'text-[#1DB954]' 
+                      : 'text-white group-hover:text-white'
+                  }`}>
                     {track.name}
                   </p>
-                  <p className="text-gray-400 text-xs truncate">{track.artists.join(", ")}</p>
+                  <p className={`text-xs truncate ${
+                    isTrackFromCurrentPlaylist(track) 
+                      ? 'text-[#1DB954]/80' 
+                      : 'text-gray-400'
+                  }`}>
+                    {track.artists.join(", ")}
+                  </p>
                 </div>
               </div>
 
-              <div className="col-span-3 text-gray-400 group-hover:text-white truncate">
+              <div className={`col-span-3 truncate ${
+                isTrackFromCurrentPlaylist(track) 
+                  ? 'text-[#1DB954]' 
+                  : 'text-gray-400 group-hover:text-white'
+              }`}>
                 {track.album.name}
               </div>
 
-              <div className="col-span-1 text-right text-gray-400">
+              <div className={`col-span-1 text-right ${
+                isTrackFromCurrentPlaylist(track) 
+                  ? 'text-[#1DB954]' 
+                  : 'text-gray-400'
+              }`}>
                 {formatDuration(track.duration)}
               </div>
             </motion.div>
