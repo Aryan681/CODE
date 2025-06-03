@@ -160,7 +160,7 @@ export const getPlaylistTracks = async (playlistId) => {
 };
 
 export const setVolume = async (volume) => {
-  const response = await fetch("http://localhost:5000/api/spotify/volume", {
+  const response = await fetch("http://localhost:3000/api/spotify/volume", {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
@@ -176,7 +176,7 @@ export const setVolume = async (volume) => {
 };
 
 export const getCurrentPlaybackState = async () => {
-  const response = await fetch("http://localhost:5000/api/spotify/player", {
+  const response = await fetch("http://localhost:3000/api/spotify/player", {
     method: "GET",
     headers: {
       "Content-Type": "application/json",

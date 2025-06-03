@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
-import { playTrack, pauseTrack, resumeTrack, skipTrack } from '../../../Services/spotifyService';
+import { playTrack, pauseTrack, resumeTrack } from '../../../Services/spotifyService';
+import { useSpotifyPlayerContext } from '../../../context/SpotifyPlayerContext';
 
 export const usePlayerHandlers = (player, deviceId, currentTrack, isPlaying, state) => {
   const {
@@ -13,6 +14,8 @@ export const usePlayerHandlers = (player, deviceId, currentTrack, isPlaying, sta
     setCurrentPosition,
     setIsDragging
   } = state;
+
+  const { playNext, playPrevious } = useSpotifyPlayerContext();
 
   const handleClose = useCallback(async () => {
     try {
@@ -85,13 +88,17 @@ export const usePlayerHandlers = (player, deviceId, currentTrack, isPlaying, sta
   }, [player, deviceId, currentTrack, isPlaying]);
 
   const handleSkip = useCallback(async (direction) => {
-    if (!deviceId) return;
+    if (!player) return;
     try {
-      await skipTrack(direction);
+      if (direction === 'next') {
+        await playNext();
+      } else {
+        await playPrevious();
+      }
     } catch (err) {
       console.error('Error skipping track:', err);
     }
-  }, [deviceId]);
+  }, [player, playNext, playPrevious]);
 
   const handleVolumeChange = useCallback(async (e) => {
     const newVolume = parseInt(e.target.value);

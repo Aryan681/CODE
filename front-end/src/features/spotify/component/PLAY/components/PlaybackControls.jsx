@@ -1,14 +1,16 @@
 import React from 'react';
+import { useSpotifyPlayerContext } from '../../../context/SpotifyPlayerContext';
 
 const PlaybackControls = ({ 
   isPlaying, 
-  handlePlayPause, 
-  handleSkip 
+  handlePlayPause
 }) => {
+  const { playNext, playPrevious } = useSpotifyPlayerContext();
+
   return (
     <div className="flex items-center justify-center gap-6">
       <button 
-        onClick={() => handleSkip("previous")} 
+        onClick={playPrevious} 
         className="text-gray-400 hover:text-white transition-colors transform hover:scale-110 duration-200"
       >
         <svg className="w-7 h-7" viewBox="0 0 24 24" fill="currentColor">
@@ -30,7 +32,7 @@ const PlaybackControls = ({
         )}
       </button>
       <button 
-        onClick={() => handleSkip("next")} 
+        onClick={playNext} 
         className="text-gray-400 hover:text-white transition-colors transform hover:scale-110 duration-200"
       >
         <svg className="w-7 h-7" viewBox="0 0 24 24" fill="currentColor">

@@ -1,8 +1,8 @@
 import { useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getPlaylistTracks, getUserPlaylists, playTrack } from "../../features/spotify/Services/spotifyService";
-import { FiMusic, FiPlay, FiPause, FiClock, FiUser, FiCalendar } from "react-icons/fi";
+import { getPlaylistTracks, getUserPlaylists } from "../../features/spotify/Services/spotifyService";
+import { FiMusic, FiPlay, FiPause, FiClock, FiUser, FiCalendar, FiShuffle } from "react-icons/fi";
 import { useSpotifyPlayerContext } from "../../features/spotify/context/SpotifyPlayerContext";
 import SpotifyLoader from "../../features/spotify/component/common/SpotifyLoader";
 
@@ -11,7 +11,20 @@ const PlaylistDetails = () => {
   const [tracks, setTracks] = useState([]);
   const [playlist, setPlaylist] = useState(null);
   const [loading, setLoading] = useState(true);
-  const { deviceId, isPlayerReady, isPlaying, currentTrack } = useSpotifyPlayerContext();
+  const { 
+    deviceId, 
+    isPlayerReady, 
+    isPlaying, 
+    currentTrack, 
+    togglePlayPause, 
+    playPlaylist, 
+    isShuffled, 
+    toggleShuffle,
+    addToQueue,
+    clearQueue,
+    queue,
+    currentQueueIndex
+  } = useSpotifyPlayerContext();
 
   const formatDuration = (ms) => {
     const minutes = Math.floor(ms / 60000);
@@ -44,6 +57,13 @@ const PlaylistDetails = () => {
     fetchPlaylistData();
   }, [playlistId]);
 
+  // Add tracks to queue when they're loaded
+  useEffect(() => {
+    if (tracks.length > 0) {
+      addToQueue(tracks);
+    }
+  }, [tracks]);
+
   const handleTrackClick = async (trackUri) => {
     if (!isPlayerReady || !deviceId) {
       console.error("Player not ready or no device ID available");
@@ -54,6 +74,31 @@ const PlaylistDetails = () => {
       await playTrack(trackUri, deviceId);
     } catch (error) {
       console.error("Failed to play track:", error);
+    }
+  };
+
+  const handlePlayPlaylist = async () => {
+    if (!isPlayerReady || !deviceId) {
+      console.error("Player not ready or no device ID available");
+      return;
+    }
+
+    try {
+      // Check if current track is from this playlist
+      const isCurrentTrackFromPlaylist = tracks.some(track => track.id === currentTrack?.id);
+      
+      if (isCurrentTrackFromPlaylist) {
+        // If current track is from this playlist, toggle play/pause
+        await togglePlayPause();
+      } else {
+        // Clear existing queue and add new tracks
+        clearQueue();
+        addToQueue(tracks);
+        // Start playing the playlist with shuffle enabled
+        await playPlaylist(playlistId, true);
+      }
+    } catch (error) {
+      console.error("Failed to play playlist:", error);
     }
   };
 
@@ -126,16 +171,33 @@ const PlaylistDetails = () => {
         </motion.div>
       </div>
 
-      {/* Play Button */}
+      {/* Play Button and Shuffle Toggle */}
       <motion.div 
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.4 }}
-        className="px-8 py-4"
+        className="px-8 py-4 flex items-center gap-4"
       >
-        <button className="bg-[#1DB954] hover:bg-[#1ed760] text-black font-bold py-3 px-8 rounded-full flex items-center gap-2 transition-all duration-300 hover:scale-105">
-          <FiPlay className="w-6 h-6" />
-          PLAY
+        <button 
+          onClick={handlePlayPlaylist}
+          className="bg-[#1DB954] hover:bg-[#1ed760] text-black font-bold py-3 px-8 rounded-full flex items-center gap-2 transition-all duration-300 hover:scale-105"
+        >
+          {tracks.some(track => track.id === currentTrack?.id) && isPlaying ? (
+            <FiPause className="w-6 h-6" />
+          ) : (
+            <FiPlay className="w-6 h-6" />
+          )}
+          {tracks.some(track => track.id === currentTrack?.id) && isPlaying ? "PAUSE" : "PLAY"}
+        </button>
+
+        <button
+          onClick={toggleShuffle}
+          className={`p-3 rounded-full transition-all duration-300 hover:scale-105 ${
+            isShuffled ? 'text-[#1DB954]' : 'text-gray-400 hover:text-white'
+          }`}
+          title={isShuffled ? "Disable shuffle" : "Enable shuffle"}
+        >
+          <FiShuffle className="w-6 h-6" />
         </button>
       </motion.div>
 
@@ -160,8 +222,9 @@ const PlaylistDetails = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
-              className="grid grid-cols-12 gap-4 items-center py-3 px-2 rounded hover:bg-gray-800/50 group text-sm cursor-pointer transition-colors duration-200"
-              onClick={() => handleTrackClick(track.uri)}
+              className={`grid grid-cols-12 gap-4 items-center py-3 px-2 rounded hover:bg-gray-800/50 group text-sm cursor-pointer transition-colors duration-200 ${
+                currentQueueIndex === index ? 'bg-gray-800/50' : ''
+              }`}
             >
               <div className="col-span-1 text-center text-gray-400 group-hover:text-white">
                 {currentTrack?.id === track.id ? (
