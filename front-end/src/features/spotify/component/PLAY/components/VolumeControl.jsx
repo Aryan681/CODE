@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 const VolumeControl = ({ 
   volume, 
@@ -6,11 +6,27 @@ const VolumeControl = ({
   handleVolumeChange, 
   handleMuteToggle 
 }) => {
+  const [showPresets, setShowPresets] = useState(false);
+
+  // Volume presets for common listening levels
+  const volumePresets = [
+    { label: 'Quiet', value: 25 },
+    { label: 'Normal', value: 50 },
+    { label: 'Loud', value: 75 },
+    { label: 'Max', value: 100 }
+  ];
+
+  const handlePresetClick = (presetValue) => {
+    handleVolumeChange({ target: { value: presetValue } });
+    setShowPresets(false);
+  };
+
   return (
-    <div className="w-1/4 flex items-center justify-end gap-2">
+    <div className="w-1/4 flex items-center justify-end gap-2 relative">
       <button 
         onClick={handleMuteToggle}
         className="text-gray-400 hover:text-white transition-colors"
+        title={isMuted ? "Unmute" : "Mute"}
       >
         {volume === 0 ? (
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
@@ -26,20 +42,54 @@ const VolumeControl = ({
           </svg>
         )}
       </button>
-      <div className="relative w-32 h-1 bg-gray-600 rounded-lg">
-        <div 
-          className="absolute h-full bg-[#1DB954] rounded-lg"
-          style={{ width: `${volume}%` }}
-        />
-        <input
-          type="range"
-          min="0"
-          max="100"
-          value={volume}
-          onChange={handleVolumeChange}
-          className="absolute w-full h-full opacity-0 cursor-pointer"
-        />
+      
+      <div className="relative w-32 group">
+        <div className="relative h-1 bg-gray-600 rounded-lg">
+          <div 
+            className="absolute h-full bg-[#1DB954] rounded-lg transition-all duration-200"
+            style={{ width: `${volume}%` }}
+          />
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={volume}
+            onChange={handleVolumeChange}
+            className="absolute w-full h-full opacity-0 cursor-pointer"
+          />
+        </div>
+        
+        {/* Volume level indicator */}
+        <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-80 text-white px-2 py-1 rounded text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          {volume}%
+        </div>
       </div>
+
+      {/* Volume presets button */}
+      <button
+        onClick={() => setShowPresets(!showPresets)}
+        className="text-gray-400 hover:text-white transition-colors"
+        title="Volume presets"
+      >
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+        </svg>
+      </button>
+
+      {/* Volume presets dropdown */}
+      {showPresets && (
+        <div className="absolute bottom-full right-0 mb-2 bg-[#282828] rounded-lg shadow-lg p-2 z-50">
+          {volumePresets.map((preset) => (
+            <button
+              key={preset.label}
+              onClick={() => handlePresetClick(preset.value)}
+              className="block w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-[#383838] rounded transition-colors"
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

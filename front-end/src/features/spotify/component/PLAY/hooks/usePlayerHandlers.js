@@ -49,15 +49,24 @@ export const usePlayerHandlers = (player, deviceId, currentTrack, isPlaying, sta
         }
         await pauseTrack();
       } else {
+        // Get stored volume from localStorage
+        const storedVolume = localStorage.getItem('spotifyVolume');
+        const volumeToApply = storedVolume ? parseInt(storedVolume) / 100 : 0.5;
+
         // If we have a saved track but no current track, try to play it
         if (!currentTrack) {
           const savedTrack = localStorage.getItem('spotifyCurrentTrack');
           const savedPosition = localStorage.getItem('spotifyPosition');
+          
           if (savedTrack) {
             const track = JSON.parse(savedTrack);
             try {
               // First play the track
               await playTrack(track.uri, currentDeviceId);
+              // Then set the stored volume
+              if (player) {
+                await player.setVolume(volumeToApply);
+              }
               // Then seek to the saved position
               if (savedPosition) {
                 await player.seek(parseInt(savedPosition));
@@ -70,9 +79,14 @@ export const usePlayerHandlers = (player, deviceId, currentTrack, isPlaying, sta
         } else {
           // For existing track, first play then seek to saved position
           const savedPosition = localStorage.getItem('spotifyPosition');
+          
           try {
             // First play the track
             await playTrack(currentTrack.uri, currentDeviceId);
+            // Then set the stored volume
+            if (player) {
+              await player.setVolume(volumeToApply);
+            }
             // Then seek to the saved position
             if (savedPosition) {
               await player.seek(parseInt(savedPosition));
@@ -100,28 +114,61 @@ export const usePlayerHandlers = (player, deviceId, currentTrack, isPlaying, sta
     }
   }, [player, playNext, playPrevious]);
 
+  // Helper function for logarithmic volume scaling
+  const logarithmicScale = (value) => {
+    // Convert linear 0-100 to logarithmic scale
+    // This provides better human perception of volume changes
+    return Math.pow(value / 100, 2) * 100;
+  };
+
+  // Helper function for inverse logarithmic scaling
+  const inverseLogarithmicScale = (value) => {
+    // Convert logarithmic scale back to linear 0-100
+    return Math.sqrt(value / 100) * 100;
+  };
+
   const handleVolumeChange = useCallback(async (e) => {
     const newVolume = parseInt(e.target.value);
     setVolume(newVolume);
     localStorage.setItem('spotifyVolume', newVolume.toString());
+    
     if (player) {
-      await player.setVolume(newVolume / 100);
+      try {
+        await player.setVolume(newVolume / 100);
+      } catch (error) {
+        console.error('Error setting volume:', error);
+      }
     }
   }, [player, setVolume]);
 
   const handleMuteToggle = useCallback(async () => {
     if (isMuted) {
-      setVolume(previousVolume);
-      localStorage.setItem('spotifyVolume', previousVolume.toString());
+      // When unmuting, restore previous volume from localStorage
+      const storedVolume = localStorage.getItem('spotifyVolume');
+      const volumeToApply = storedVolume ? parseInt(storedVolume) : previousVolume;
+      
+      setVolume(volumeToApply);
+      localStorage.setItem('spotifyVolume', volumeToApply.toString());
+      
       if (player) {
-        await player.setVolume(previousVolume / 100);
+        try {
+          await player.setVolume(volumeToApply / 100);
+        } catch (error) {
+          console.error('Error unmuting:', error);
+        }
       }
     } else {
+      // When muting, save current volume and set to 0
       setPreviousVolume(volume);
       setVolume(0);
       localStorage.setItem('spotifyVolume', '0');
+      
       if (player) {
-        await player.setVolume(0);
+        try {
+          await player.setVolume(0);
+        } catch (error) {
+          console.error('Error muting:', error);
+        }
       }
     }
     setIsMuted(!isMuted);

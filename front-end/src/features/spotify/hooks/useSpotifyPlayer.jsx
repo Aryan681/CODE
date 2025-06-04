@@ -106,7 +106,7 @@ export default function useSpotifyPlayer(token) {
         const playerInstance = new window.Spotify.Player({
           name: "Eco Web Player",
           getOAuthToken: cb => cb(validToken),
-          volume: 0.3,
+          volume: 0.5, // Default volume, will be overridden by stored volume
         });
 
         // Set up error listeners
@@ -159,11 +159,17 @@ export default function useSpotifyPlayer(token) {
           // Restore playback state if we have a saved track
           const savedTrack = localStorage.getItem('spotifyCurrentTrack');
           const savedPosition = localStorage.getItem('spotifyPosition');
+          const savedVolume = localStorage.getItem('spotifyVolume');
 
           if (savedTrack) {
             try {
               const track = JSON.parse(savedTrack);
-              // First seek to the saved position
+              // First restore the volume from localStorage
+              if (savedVolume) {
+                const volume = parseInt(savedVolume);
+                await playerInstance.setVolume(volume / 100);
+              }
+              // Then seek to the saved position
               if (savedPosition) {
                 await playerInstance.seek(parseInt(savedPosition));
               }

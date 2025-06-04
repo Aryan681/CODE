@@ -72,24 +72,24 @@ export const SpotifyPlayerProvider = ({ children }) => {
 
   const playPlaylist = async (playlistId, tracks, startWithRandom = false) => {
     if (!deviceId || !token) return;
+  
     try {
-      // Clear existing queue
       clearQueue();
       setCurrentPlaylistId(playlistId);
-      setOriginalTracks(tracks); // Store original tracks
-
-      // Add playlist context to each track
+      setOriginalTracks(tracks);
+  
       const tracksWithContext = tracks.map(track => ({
         ...track,
         playlistContext: playlistId
       }));
-
+  
+      let firstTrackToPlay;
+  
       if (isShuffled) {
-        // Shuffle the tracks array
         const shuffledTracks = [...tracksWithContext].sort(() => Math.random() - 0.5);
         addToQueue(shuffledTracks);
-        
-        // Enable shuffle mode
+        firstTrackToPlay = shuffledTracks[0];
+  
         await fetch(`https://api.spotify.com/v1/me/player/shuffle?state=true`, {
           method: 'PUT',
           headers: {
@@ -98,10 +98,9 @@ export const SpotifyPlayerProvider = ({ children }) => {
           }
         });
       } else {
-        // Add tracks in sequence
         addToQueue(tracksWithContext);
-        
-        // Disable shuffle mode
+        firstTrackToPlay = tracksWithContext[0];
+  
         await fetch(`https://api.spotify.com/v1/me/player/shuffle?state=false`, {
           method: 'PUT',
           headers: {
@@ -110,9 +109,7 @@ export const SpotifyPlayerProvider = ({ children }) => {
           }
         });
       }
-
-      // Start playing the playlist from the first track
-      const firstTrack = isShuffled ? queue[0] : tracksWithContext[0];
+  
       const response = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
         method: 'PUT',
         headers: {
@@ -120,20 +117,20 @@ export const SpotifyPlayerProvider = ({ children }) => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          uris: [firstTrack.uri]
+          uris: [firstTrackToPlay.uri]
         })
       });
-
+  
       if (!response.ok) {
         throw new Error('Failed to play playlist');
       }
-
-      // Set the current queue index to 0 since we're starting from the first track
+  
       setCurrentQueueIndex(0);
     } catch (error) {
       console.error('Failed to play playlist:', error);
     }
   };
+  
 
   const addToQueue = (tracks) => {
     setQueue(prevQueue => [...prevQueue, ...tracks]);
@@ -374,3 +371,5 @@ export const SpotifyPlayerProvider = ({ children }) => {
     </SpotifyPlayerContext.Provider>
   );
 }; 
+
+
